@@ -2,35 +2,53 @@
 # For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
 
 name: Node.js Package
+env:
+  MONGODB_URI: ${{ secrets.MONGODB_URI }}
 
-on:
-  release:
-    types: [created]
+on: workflow_dispatch
 
 jobs:
-  build:
+  fetch-node-modules-and-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm ci
-      - run: npm test
-
-  publish-gpr:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: https://npm.pkg.github.com/
-      - run: npm ci
-      - run: npm publish
+      - uses: actions/checkout@v2
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      - name: List
+        run: ls -la
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Show Env
+        run: cat .vercel/.env.preview.local
+      - name: Test and Build Project Artifacts
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
         env:
-          NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          GENERATE_SOURCEMAP: false
+          DISABLE_ESLINT_PLUGIN: true
+          PUBLIC_URL: /
+          REACT_APP_SERVER_API_V1: 'https://api-antdev.takas.vn/api/v1'
+          REACT_APP_SERVER_API: 'https://api-antdev.takas.vn'
+      - name: Deploy Ant Project
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          source: ./build
+          target: ~/Documents/ant-workspace/ant-industries-dev
+          overwrite: 1
+      - name: Success Tests and Build ✅
+        uses: appleboy/telegram-action@master
+        if: ${{ success() }}
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: ✅ ant-industries-development:test & build is success by ${{ github.actor }}
+      - name: Failure Tests and Build 🚨
+        uses: appleboy/telegram-action@master
+        if: ${{ failure() }}
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: 🚨 ant-industries-development:test & build is failure by ${{ github.actor }}

@@ -1,3 +1,0 @@
-name: "next-mongodb-development"
-env:
-  MONGODB_URI: ${{ secrets.MONGODB_URI }}
